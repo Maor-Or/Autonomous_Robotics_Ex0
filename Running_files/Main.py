@@ -292,8 +292,12 @@ def export_to_kml(satellite_data, parent_directory , kml_output_filename):
 
 
 if __name__ == "__main__":
-    # Parsing phase
-    parent_directory = os.path.split(os.getcwd())[0]
+    ### Parsing phase ###
+    
+    # Get the directory of the current script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Get the parent directory
+    parent_directory = os.path.dirname(script_dir)
     ephemeris_data_directory = os.path.join(parent_directory, 'data')
     sys.path.insert(0, parent_directory)
     # Get path to sample file in data directory, which is located in the parent directory of this notebook
@@ -302,7 +306,7 @@ if __name__ == "__main__":
     df = update_df_with_xyz_and_pseudorange(df, ephemeris_data_directory)
     satellite_df = export_updated_df_to_csv(df, parent_directory, "ex0_part2.csv")
 
-    # Location Calculation phase
+    ### Location Calculation phase ###
     result_coordinates = calculate_locations_in_df(satellite_df)
     updated_satellite_df = update_satellite_df_with_user_location_and_export(satellite_df, result_coordinates,
                                                                              parent_directory, 'ex0_part5.csv')
