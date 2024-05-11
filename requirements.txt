@@ -1,5 +1,0 @@
-pip install navpy
-pip install georinex
-pip install unlzw3
-pip install pyproj
-pip install simplekml
