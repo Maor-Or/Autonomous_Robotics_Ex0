@@ -1,7 +1,6 @@
 from datetime import datetime, timezone, timedelta
 import pandas as pd
 import numpy as np
-#import matplotlib.pyplot as plt
 import navpy
 from gnssutils import EphemerisManager
 import sys, os, csv
@@ -56,8 +55,6 @@ def export_gnss_data_from_file(input_filepath):
         measurements['TimeOffsetNanos'] = pd.to_numeric(measurements['TimeOffsetNanos'])
     else:
         measurements['TimeOffsetNanos'] = 0
-
-    # print(measurements.columns)
 
     measurements['GpsTimeNanos'] = measurements['TimeNanos'] - (
                 measurements['FullBiasNanos'] - measurements['BiasNanos'])
@@ -180,7 +177,7 @@ def update_df_with_xyz_and_pseudorange(measurements, ephemeris_data_directory):
 
     return measurements
 
-
+#as required in part 2
 def export_updated_df_to_csv(measurements, parent_directory, csv_output_filename):
     columns_to_keep = ['UnixTime', 'SvName', 'Sat.X', 'Sat.Y', 'Sat.Z', 'Pseudo-Range', 'Cn0DbHz']
 
@@ -272,7 +269,7 @@ def update_satellite_df_with_user_location_and_export(satellite_data, result_coo
 
 
 def export_to_kml(satellite_data, parent_directory , kml_output_filename):
-    # Assuming `data` is your DataFrame containing satellite data
+    
     # Group the data by 'GPS time' and iterate over each group
     kml = simplekml.Kml()
 
@@ -300,8 +297,8 @@ if __name__ == "__main__":
     parent_directory = os.path.dirname(script_dir)
     ephemeris_data_directory = os.path.join(parent_directory, 'data')
     sys.path.insert(0, parent_directory)
-    # Get path to sample file in data directory, which is located in the parent directory of this notebook
-    input_filepath = os.path.join(parent_directory, 'data', 'sample', 'gnss_log_2024_04_13_19_51_17_boaz_fixed.txt')
+    # Get path to sample file in data directory, which is located in the parent directory of this running file
+    input_filepath = os.path.join(parent_directory, 'data', 'sample', 'gnss_log_2024_04_13_19_51_17_boaz_fixed.txt') # change the txt file name to your desired gnss txt log file.
     df = export_gnss_data_from_file(input_filepath)
     df = update_df_with_xyz_and_pseudorange(df, ephemeris_data_directory)
     satellite_df = export_updated_df_to_csv(df, parent_directory, "ex0_part2.csv")
