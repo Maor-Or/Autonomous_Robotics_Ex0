@@ -192,47 +192,72 @@ def export_updated_df_to_csv(measurements, parent_directory, csv_output_filename
 
     return measurements_to_csv
 
-
-def trilateration(satellite_data):
+#Convert ECEF coordinates to geodetic
+def cartesian_to_geodetic(x, y, z):
     # Define the coordinate system transformations
     ecef_to_lla = pyproj.Transformer.from_crs("EPSG:4978", "EPSG:4326", always_xy=True).transform
+    
+    # Convert Cartesian coordinates to geodetic (lat, lon, alt)
+    lon, lat, alt = ecef_to_lla(x, y, z)
+    
+    return lat, lon, alt
 
-    # Initial guess for position (using mean of satellite positions)
-    x_initial = satellite_data['Sat.X'].mean()
-    y_initial = satellite_data['Sat.Y'].mean()
-    z_initial = satellite_data['Sat.Z'].mean()
+def least_squares_trilateration(satellite_positions, measured_pseudorange, initial_position_guess, initial_clock_bias):
 
-    # Define function for optimization
-    def residuals(position):
-        x, y, z = position
-        predicted_range = np.sqrt((satellite_data['Sat.X'] - x) ** 2 + (satellite_data['Sat.Y'] - y) ** 2 + (
-                    satellite_data['Sat.Z'] - z) ** 2)
-        difference = predicted_range - satellite_data['Pseudo-Range']
-        return difference
-
-    # Perform least squares optimization
-    result = least_squares(residuals, [x_initial, y_initial, z_initial])
-
-    # Extract optimized position
-    x_final, y_final, z_final = result.x
-
-    # Convert optimized ECEF coordinates to geodetic (lat, lon, alt)
-    lon, lat, alt = ecef_to_lla(x_final, y_final, z_final)
-    alt = result.fun.mean()  # Use the mean of the residuals as altitude
-
-    return x_final, y_final, z_final, lat, lon, alt
-
+    position_correction = 100 * np.ones(3)
+    clock_bias_correction = initial_clock_bias
+    
+    # Set up the G matrix with the right dimensions. We will later replace the first 3 columns
+    # Note that clock_bias here is the clock bias in meters equivalent, so the actual clock bias is clock_bias / LIGHTSPEED
+    G_matrix = np.ones((measured_pseudorange.size, 4))
+    iterations = 0
+    
+    while np.linalg.norm(position_correction) > 1e-3:
+        # Eq. (2): Calculate range estimates
+        range_estimates = np.linalg.norm(satellite_positions - initial_position_guess, axis=1)
+        
+        # Eq. (1): Predicted pseudoranges
+        predicted_pseudoranges = range_estimates + initial_clock_bias
+        
+        # Eq. (3): Residuals
+        residuals = measured_pseudorange - predicted_pseudoranges
+        
+        # Update G matrix
+        G_matrix[:, 0:3] = -(satellite_positions - initial_position_guess) / range_estimates[:, None]
+        
+        # Eq. (4): Solve for corrections
+        corrections = np.linalg.inv(np.transpose(G_matrix) @ G_matrix) @ np.transpose(G_matrix) @ residuals
+        
+        # Extract corrections
+        position_correction = corrections[0:3]
+        clock_bias_correction = corrections[3]
+        
+        # Update position and clock bias
+        initial_position_guess = initial_position_guess + position_correction
+        initial_clock_bias = initial_clock_bias + clock_bias_correction
+    
+    # Convert optimized ECEF coordinates to geodetic (latitude, longitude, altitude)
+    latitude, longitude, altitude = cartesian_to_geodetic(initial_position_guess[0], initial_position_guess[1], initial_position_guess[2])
+    
+    return initial_position_guess[0], initial_position_guess[1], initial_position_guess[2], latitude, longitude, altitude
 
 # calculate user's location for each epoch
 def calculate_locations_in_df(satellite_data):
     result_coordinates = {}
     # Group the data by 'GPS time' and iterate over each group
     for time, group in satellite_data.groupby('GPS time'):
-        # Call the trilateration function for each group
-        x_final, y_final, z_final, lat, lon, alt = trilateration(group)
+        # Extract relevant data for least squares trilateration
+        xs = group[['Sat.X', 'Sat.Y', 'Sat.Z']].values  # Satellite positions
+        measured_pseudorange = group['Pseudo-Range'].values  # Measured pseudorange
+        x0 = np.array([group['Sat.X'].mean(), group['Sat.Y'].mean(), group['Sat.Z'].mean()])  # Initial guess for position
+        b0 = 0  # Initial guess for clock bias
+        
+        # Call the least squares trilateration function for each group
+        x_final, y_final, z_final, lat, lon, alt = least_squares_trilateration(xs, measured_pseudorange, x0, b0)
+        
+        # Store the result coordinates for the current time
         result_coordinates[time] = (x_final, y_final, z_final, lat, lon, alt)
     return result_coordinates
-
 
 
 def update_satellite_df_with_user_location_and_export(satellite_data, result_coordinates, parent_directory, csv_output_filename):
@@ -298,7 +323,7 @@ if __name__ == "__main__":
     ephemeris_data_directory = os.path.join(parent_directory, 'data')
     sys.path.insert(0, parent_directory)
     # Get path to sample file in data directory, which is located in the parent directory of this running file
-    input_filepath = os.path.join(parent_directory, 'data', 'sample', 'gnss_log_2024_04_13_19_51_17_boaz_fixed.txt') # change the txt file name to your desired gnss txt log file.
+    input_filepath = os.path.join(parent_directory, 'data', 'sample', 'gnss_log_2024_04_13_19_53_33_boaz_driving.txt') # change the txt file name to your desired gnss txt log file.
     df = export_gnss_data_from_file(input_filepath)
     df = update_df_with_xyz_and_pseudorange(df, ephemeris_data_directory)
     satellite_df = export_updated_df_to_csv(df, parent_directory, "ex0_part2.csv")
