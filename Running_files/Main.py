@@ -202,6 +202,7 @@ def cartesian_to_geodetic(x, y, z):
     
     return lat, lon, alt
 
+# the algorithm to calculate user's position, in one timestamp (per epoch):
 def least_squares_trilateration(satellite_positions, measured_pseudorange, initial_position_guess, initial_clock_bias):
 
     position_correction = 100 * np.ones(3)
@@ -213,19 +214,19 @@ def least_squares_trilateration(satellite_positions, measured_pseudorange, initi
     iterations = 0
     
     while np.linalg.norm(position_correction) > 1e-3:
-        # Eq. (2): Calculate range estimates
+        # Calculate range estimates
         range_estimates = np.linalg.norm(satellite_positions - initial_position_guess, axis=1)
         
-        # Eq. (1): Predicted pseudoranges
+        # Predicted pseudoranges
         predicted_pseudoranges = range_estimates + initial_clock_bias
         
-        # Eq. (3): Residuals
+        # Residuals
         residuals = measured_pseudorange - predicted_pseudoranges
         
         # Update G matrix
         G_matrix[:, 0:3] = -(satellite_positions - initial_position_guess) / range_estimates[:, None]
         
-        # Eq. (4): Solve for corrections
+        # Solve for corrections
         corrections = np.linalg.inv(np.transpose(G_matrix) @ G_matrix) @ np.transpose(G_matrix) @ residuals
         
         # Extract corrections
@@ -241,7 +242,7 @@ def least_squares_trilateration(satellite_positions, measured_pseudorange, initi
     
     return initial_position_guess[0], initial_position_guess[1], initial_position_guess[2], latitude, longitude, altitude
 
-# calculate user's location for each epoch
+# calculate user's location for each epoch, going through all epochs:
 def calculate_locations_in_df(satellite_data):
     result_coordinates = {}
     # Group the data by 'GPS time' and iterate over each group
